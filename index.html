@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Маше</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { overflow: hidden; touch-action: none; }
+
+        body {
+            background: #0a0012;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas#matrix {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            width: 100%;
+        }
+
+        canvas#heart {
+            display: block;
+            margin: 0 auto;
+            width: 85vw;
+            max-width: 400px;
+            height: auto;
+        }
+
+        canvas#text {
+            display: block;
+            margin: 15px auto 0;
+            width: 90vw;
+            max-width: 600px;
+            height: auto;
+        }
+
+        .particle {
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            will-change: transform, opacity;
+            animation: floatUp linear infinite;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(100vh) scale(0); opacity: 0; }
+            10% { opacity: 0.6; }
+            90% { opacity: 0.3; }
+            100% { transform: translateY(-10vh) scale(1); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix"></canvas>
+
+    <div class="container">
+        <canvas id="heart" width="300" height="270"></canvas>
+        <canvas id="text" width="600" height="90"></canvas>
+    </div>
+
+    <script>
+        const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 600;
+        const isLow = isMobile && window.innerWidth < 400;
+
+        // === Matrix rain ===
+        const mCanvas = document.getElementById('matrix');
+        const mCtx = mCanvas.getContext('2d');
+        let mW, mH;
+        const fSize = isLow ? 16 : 14;
+        const matrixInterval = isLow ? 60 : 40;
+        const codeChars = '01{}[]<>;:=+*&^%$#@!';
+        let cols, drops;
+
+        function resizeMatrix() {
+            mW = mCanvas.width = Math.ceil(window.innerWidth / fSize) * fSize;
+            mH = mCanvas.height = window.innerHeight;
+            cols = Math.floor(mW / fSize);
+            drops = Array.from({ length: cols }, () => Math.random() * -50);
+        }
+        resizeMatrix();
+
+        function drawMatrix() {
+            mCtx.fillStyle = 'rgba(10, 0, 18, 0.06)';
+            mCtx.fillRect(0, 0, mW, mH);
+            mCtx.font = fSize + 'px monospace';
+
+            for (let i = 0; i < cols; i++) {
+                const ch = codeChars[(Math.random() * codeChars.length) | 0];
+                mCtx.fillStyle = Math.random() > 0.97 ? '#ff69b4' : 'rgba(80,20,80,0.7)';
+                mCtx.fillText(ch, i * fSize, drops[i] * fSize);
+
+                if (drops[i] * fSize > mH && Math.random() > 0.97) drops[i] = 0;
+                drops[i] += 0.5;
+            }
+        }
+
+        setInterval(drawMatrix, matrixInterval);
+
+        // === Heart canvas ===
+        const hCanvas = document.getElementById('heart');
+        const hCtx = hCanvas.getContext('2d');
+        const W = hCanvas.width;
+        const H = hCanvas.height;
+
+        function heartPoint(t) {
+            const x = 16 * Math.pow(Math.sin(t), 3);
+            const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+            return { x, y };
+        }
+
+        const codeSym = '01{}[]<>;:=+*&^%$#@!fnvretalc'.split('');
+        const hPts = [];
+        const outlineN = isLow ? 120 : 200;
+        const fillN = isLow ? 300 : 600;
+
+        for (let i = 0; i < outlineN; i++) {
+            const p = heartPoint((i / outlineN) * Math.PI * 2);
+            hPts.push({
+                x: W/2 + p.x * 8.2,
+                y: H/2 + p.y * 8.2 - 8,
+                ch: codeSym[(Math.random() * codeSym.length) | 0],
+                out: true
+            });
+        }
+
+        for (let i = 0; i < fillN; i++) {
+            const p = heartPoint(Math.random() * Math.PI * 2);
+            const r = Math.random() * 0.95;
+            hPts.push({
+                x: W/2 + p.x * 8.2 * r,
+                y: H/2 + p.y * 8.2 * r - 8,
+                ch: codeSym[(Math.random() * codeSym.length) | 0],
+                out: false
+            });
+        }
+
+        const t0 = Date.now();
+
+        function animateHeart() {
+            hCtx.clearRect(0, 0, W, H);
+            const el = Date.now() - t0;
+            const breath = 1 + 0.04 * Math.sin(Date.now() / 500);
+
+            for (let i = 0; i < hPts.length; i++) {
+                const pt = hPts[i];
+                const dx = pt.x - W/2, dy = pt.y - H/2;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const le = el - (dist / 200) * 2000;
+                if (le < 0) continue;
+
+                const a = le < 600 ? le / 600 : 1;
+                const wave = Math.sin(dist * 0.003 - Date.now() / 300);
+                const s = breath * (1 + wave * 0.15);
+                const hs = wave * 30;
+
+                hCtx.save();
+                hCtx.translate(pt.x, pt.y);
+                hCtx.scale(s, s);
+                hCtx.font = (pt.out ? 'bold 11px' : '9px') + ' monospace';
+                hCtx.fillStyle = `rgba(255,${105+hs|0},${180+hs|0},${a*(pt.out?1:0.7)})`;
+                hCtx.shadowColor = pt.out ? '#ff1493' : '#ff69b4';
+                hCtx.shadowBlur = pt.out ? 6 : 2;
+                hCtx.fillText(pt.ch, 0, 0);
+                hCtx.restore();
+            }
+
+            // glow
+            const ga = 0.1 + 0.05 * Math.sin(Date.now() / 400);
+            const gr = hCtx.createRadialGradient(W/2, H/2-8, 0, W/2, H/2-8, 90);
+            gr.addColorStop(0, `rgba(255,105,180,${ga})`);
+            gr.addColorStop(1, 'transparent');
+            hCtx.fillStyle = gr;
+            hCtx.fillRect(0, 0, W, H);
+
+            requestAnimationFrame(animateHeart);
+        }
+        animateHeart();
+
+        // === Text canvas: "Маше" ===
+        const txCanvas = document.getElementById('text');
+        const txCtx = txCanvas.getContext('2d');
+        const TW = txCanvas.width;
+        const TH = txCanvas.height;
+
+        function getPixels(text, fs) {
+            const oc = document.createElement('canvas');
+            oc.width = TW; oc.height = TH;
+            const c = oc.getContext('2d');
+            c.font = `bold ${fs}px Georgia`;
+            c.fillStyle = '#fff';
+            c.textAlign = 'center';
+            c.textBaseline = 'middle';
+            c.fillText(text, TW/2, TH/2);
+            const d = c.getImageData(0, 0, TW, TH).data;
+            const px = [];
+            const step = isLow ? 6 : 4;
+            for (let y = 0; y < TH; y += step) {
+                for (let x = 0; x < TW; x += step) {
+                    if (d[(y*TW+x)*4+3] > 128) {
+                        px.push({ x, y, ch: codeSym[(Math.random()*codeSym.length)|0] });
+                    }
+                }
+            }
+            return px;
+        }
+
+        const tPx = getPixels('Маше', 60);
+        const tStart = Date.now() + 3000;
+
+        function animateText() {
+            txCtx.clearRect(0, 0, TW, TH);
+            const el = Date.now() - tStart;
+            const breath = 1 + 0.03 * Math.sin(Date.now() / 600);
+
+            for (let i = 0; i < tPx.length; i++) {
+                const pt = tPx[i];
+                const le = el - (pt.x / TW) * 1800;
+                if (le < 0) continue;
+
+                const a = le < 400 ? le / 400 : 1;
+                const wave = Math.sin(pt.x * 0.008 - Date.now() / 400);
+                const s = breath * (1 + wave * 0.08);
+                const hs = wave * 25;
+
+                txCtx.save();
+                txCtx.translate(pt.x, pt.y);
+                txCtx.scale(s, s);
+                txCtx.font = 'bold 10px monospace';
+                txCtx.fillStyle = `rgba(255,${140+hs|0},${195+hs|0},${a})`;
+                txCtx.shadowColor = '#ff1493';
+                txCtx.shadowBlur = 8;
+                txCtx.fillText(pt.ch, 0, 0);
+                txCtx.restore();
+            }
+
+            requestAnimationFrame(animateText);
+        }
+        animateText();
+
+        // === Частицы (мало на мобильных) ===
+        const maxP = isLow ? 8 : 20;
+        let pCount = 0;
+
+        function spawnParticle() {
+            if (pCount >= maxP) return;
+            pCount++;
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const sz = 2 + Math.random() * 4;
+            p.style.cssText = `
+                width:${sz}px; height:${sz}px;
+                left:${Math.random()*100}vw;
+                background:${Math.random()>0.5?'#ff69b4':'#ffb6c1'};
+                box-shadow:0 0 ${sz*2}px #ff69b4;
+                animation-duration:${5+Math.random()*5}s;
+            `;
+            document.body.appendChild(p);
+            setTimeout(() => { p.remove(); pCount--; }, 10000);
+        }
+
+        setInterval(spawnParticle, isLow ? 600 : 300);
+
+        // === Resize ===
+        window.addEventListener('resize', () => {
+            resizeMatrix();
+        });
+    </script>
+</body>
+</html>
